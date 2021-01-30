@@ -28,7 +28,7 @@ def main():
         n = g.get_node(i)
         n.attr["label"] = labels[i]
 
-    g.draw('tree.pdf')
+    g.draw('files/genetic_programming/results/tree.pdf')
 
 
 if __name__ == "__main__":

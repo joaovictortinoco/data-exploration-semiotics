@@ -4,16 +4,17 @@ from deap.gp import PrimitiveSetTyped, PrimitiveTree, genFull, graph
 from deap import creator, base, tools
 
 
-class GeneticProgramming():
+def if_then_else(input, output1, output2):
+    return output1 if input else output2
 
-    def if_then_else(self, input, output1, output2):
-        return output1 if input else output2
+
+class GeneticProgramming:
 
     def setPrimitive(self):
         pset = PrimitiveSetTyped("main", [bool, float], float)
         pset.addPrimitive(operator.xor, [bool, bool], bool)
         pset.addPrimitive(operator.mul, [float, float], float)
-        pset.addPrimitive(self.if_then_else, [bool, float, float], float)
+        pset.addPrimitive(if_then_else, [bool, float, float], float)
         pset.addTerminal(3.0, float)
         pset.addTerminal(1, bool)
 
@@ -33,5 +34,5 @@ class GeneticProgramming():
         return toolbox.individual()
 
     def evaluate(self, individual):
-        
+
         return ''
