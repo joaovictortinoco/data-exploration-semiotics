@@ -1,18 +1,20 @@
-from deap import graph
+from deap.gp import graph
 from src.models.genetic_programming import GeneticProgramming
 from pygraphviz import AGraph
 
-if __name__ == "__main__":
 
+def main():
+    print('Instanciando GP')
     gp = GeneticProgramming()
 
+    print('Set das primitivas e terminais')
     pset = gp.setPrimitive()
 
-    pset = gp.renameArgs(pset)
+    pset.renameArguments(ARG0='x')
+    pset.renameArguments(ARG1='y')
 
-    tree = gp.generateTree()
-
-    toolbox = gp.createIndividuals((-1,1))
+    print('Criando os indivíduos')
+    expr = gp.createIndividuals((-1, 1), pset)
 
     nodes, edges, labels = graph(expr)
 
@@ -27,3 +29,7 @@ if __name__ == "__main__":
         n.attr["label"] = labels[i]
 
     g.draw('tree.pdf')
+
+
+if __name__ == "__main__":
+    main()

@@ -2,11 +2,9 @@ import operator
 
 from deap.gp import PrimitiveSetTyped, PrimitiveTree, genFull, graph
 from deap import creator, base, tools
-from pygraphviz import AGraph
 
-class GeneticProgramming(object):
-    def __init__(self):
-        super.__init__()
+
+class GeneticProgramming():
 
     def if_then_else(self, input, output1, output2):
         return output1 if input else output2
@@ -21,16 +19,10 @@ class GeneticProgramming(object):
 
         return pset
 
-    def renameArgs(self, pset, x, y):
-        pset.renameArguments(ARG0=x)
-        pset.renameArguments(ARG1=y)
-
-        return pset
-
     def generateTree(self, pset, min, max):
         return genFull(pset, min_=min, max_=max)
 
-    def createIndividuals(self, weights):
+    def createIndividuals(self, weights, pset):
         creator.create("Fitness", base.Fitness, weights=(-1, 1))
         creator.create("Individuals", PrimitiveTree, fitness=creator.Fitness, pset=pset)
 
@@ -39,3 +31,7 @@ class GeneticProgramming(object):
         toolbox.register("individual", tools.initIterate, creator.Individuals, toolbox.expr)
 
         return toolbox.individual()
+
+    def evaluate(self, individual):
+        
+        return ''
