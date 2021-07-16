@@ -10,23 +10,27 @@ from deap import creator
 from deap import gp
 from deap import tools
 
-from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import f1_score
+from sklearn.neural_network import MLPRegressor
+from sklearn.datasets import fetch_california_housing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
 
-# Generates decision tree via iris dataset
-random_dataset = np.random.RandomState(1)
-X = np.sort(5 * random_dataset.rand(80, 1), axis=0)
-y = np.sin(X).ravel()
-y[::5] += 3 * (0.5 - random_dataset.rand(16))
+import pandas as pd
 
-regression = DecisionTreeRegressor(max_depth=5).fit(X, y)
+california_dataset = fetch_california_housing()
+print(california_dataset.feature_names)
+X = pd.DataFrame(california_dataset.data, columns=california_dataset.feature_names)
+y = california_dataset.target
 
-X_test = np.arange(0.0, 5.0, 1)[:, np.newaxis]
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=1, test_size=0.2)
 
-y = regression.predict(X_test)
+scaler_X =  StandardScaler()
+X_train_scaled = scaler_X.fit_transform(X_train)
+X_test_scaled = scaler_X.transform(X_test)
 
-print('Model Prediction: ', y)
-
+regression = MLPRegressor(hidden_layer_sizes=(64,64,64), activation="logistic", random_state=1, max_iter=2000).fit(X_train_scaled, y_train)
+y_prediction = regression.predict(X_test_scaled)
 
 def protectedDiv(left, right):
     try:
@@ -34,17 +38,16 @@ def protectedDiv(left, right):
     except ZeroDivisionError:
         return 1
 
-
-pset = gp.PrimitiveSet("MAIN", 1)
+pset = gp.PrimitiveSet("MAIN", 6)
 pset.addPrimitive(operator.add, 2)
 pset.addPrimitive(operator.sub, 2)
 pset.addPrimitive(operator.mul, 2)
 pset.addPrimitive(protectedDiv, 2)
 pset.addPrimitive(operator.neg, 1)
-pset.addPrimitive(math.cos, 1)
-pset.addPrimitive(math.sin, 1)
+pset.addPrimitive(math.cos, 2)
+pset.addPrimitive(math.sin, 2)
 pset.addEphemeralConstant("rand101", lambda: random.randint(0, 5))
-pset.renameArguments(ARG0='x')
+pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t', ARG4='w',ARG5='p')
 
 creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin)
@@ -58,16 +61,13 @@ toolbox.register("compile", gp.compile, pset=pset)
 
 def evalSymbReg(individual):
     # Transform the tree expression in a callable function
+    # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
-    print(func)
-    function_outcome = func(X_test)
-    function_outcome[function_outcome >= 1E308] = 0
-    # fscore = f1_score(individual_prediction, y)
-    # print(fscore)
     # Evaluate the mean squared error between the expression
     # and the real function from regression tree
-    # square_errors = ((func(x) - x ** 4 - x ** 3 - x ** 2 - x) ** 2 for x in X_test)
-    return function_outcome.sum(),
+    print(X_train_scaled)
+    square_errors = ((func(x[0].sum(), x[0].sum()) - x) ** 2 for x in X_train_scaled)
+    return square_errors,
 
 
 toolbox.register("evaluate", evalSymbReg)
