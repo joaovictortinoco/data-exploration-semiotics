@@ -1,23 +1,48 @@
-import numpy as np
-import sklearn.metrics
-
-from src.utils import fetch_dataset
-from src.models.classifiers import mlp
-
 import math
 import operator
 import random
+import time
+
+import numpy as np
+import sklearn.metrics
 
 from deap import algorithms
+from deap import base
+from deap import creator
 from deap import gp
-from deap import creator, base, tools
+from deap import tools
 
-X_train = []
-X_test = []
-y_train = []
-y_test = []
-toolbox = None
+from sklearn.neural_network import MLPRegressor
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 
+import pandas as pd
+
+print('Opening iris dataset...')
+iris_dataset = load_iris()
+
+print(iris_dataset)
+
+X = pd.DataFrame(iris_dataset.data, columns=iris_dataset.feature_names)
+y = iris_dataset.target
+
+print('Target test and train data...')
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=1, test_size=0.2)
+
+scaler_X = StandardScaler()
+print('Normalize dataset...')
+X_train_scaled = scaler_X.fit_transform(X_train)
+X_test_scaled = scaler_X.transform(X_test)
+
+print('MLP creation and training...')
+regression = MLPRegressor(hidden_layer_sizes=(64, 64, 64), activation="logistic", random_state=1, max_iter=2000) \
+    .fit(X_train_scaled, y_train)
+
+print('MLP prediction...')
+y_prediction = regression.predict(X_test_scaled)
+print(X_test_scaled)
+print(y_prediction)
 
 def protectedDiv(left, right):
     try:
@@ -26,27 +51,6 @@ def protectedDiv(left, right):
         return left / right
     except ZeroDivisionError:
         return 1
-
-
-def evalSymbReg(individual):
-    # Transform the tree expression in a callable function
-    global toolbox
-    func = toolbox.compile(expr=individual)
-    sum = 0
-    diff = 0
-
-    # Evaluate the mean squared error between the expression and the real function from regression tree
-    for (index, x) in enumerate(X_train):
-        function_result = math.ceil(func(x[0], x[1], x[2], x[3]))
-        if function_result < 0: function_result = 0
-
-        diff = (function_result - y_train[index]) ** 2
-        sum += diff
-
-    square_error = sum / len(X_train)
-
-    return square_error,
-
 
 print('Generation of GP set...')
 
@@ -70,6 +74,21 @@ toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.ex
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
+
+def evalSymbReg(individual):
+    # Transform the tree expression in a callable function
+    func = toolbox.compile(expr=individual)
+    sum  = 0
+    diff = 0
+    # Evaluate the mean squared error between the expression and the real function from regression tree
+    for (index, x) in enumerate(X_train_scaled):
+        diff = (func(x[0], x[1], x[2], x[3]) - y_train[index]) ** 2
+        sum += diff
+
+    square_error = sum/len(X_train_scaled)
+
+    return square_error,
+
 toolbox.register("evaluate", evalSymbReg)
 toolbox.register("select", tools.selTournament, tournsize=3)
 toolbox.register("mate", gp.cxOnePoint)
@@ -79,33 +98,25 @@ toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
 toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
 
-
-def calculateScore(individuals, blackbox_prediction):
+def calculateScore(individuals):
     hallOfFame = []
     for i in individuals:
         func = toolbox.compile(expr=i)
         y_gp = []
-        for x in X_test:
-            function_result = math.ceil(func(x[0], x[1], x[2], x[3]))
-            if function_result < 0: function_result = 0
-            y_gp.append(function_result)
+        for x in X_test_scaled:
+            result = func(x[0], x[1], x[2], x[3])
+            y_gp.append(result)
 
-        precision_score = sklearn.metrics.precision_score(y_test, np.array(y_gp), average='micro')
-        hallOfFame.append((precision_score, i))
+        r2_score = sklearn.metrics.r2_score(y_test, np.array(y_gp))
+        hallOfFame.append((r2_score, i))
 
-    hallOfFame.sort(key=lambda x: x[0])
+    hallOfFame.sort(key=lambda x:x[0])
     print(hallOfFame)
 
-    precision_score_mlp = sklearn.metrics.precision_score(y_test, blackbox_prediction, average='micro')
-    print(precision_score_mlp)
-
+    r2_score_mlp = sklearn.metrics.r2_score(y_test, y_prediction)
+    print(r2_score_mlp)
 
 def main():
-    global X_train, X_test, y_train, y_test, toolbox
-    X_train, X_test, y_train, y_test = fetch_dataset.fetch_iris()
-
-    blackbox_prediction = mlp.createInstance(X_train, X_test, y_train)
-
     random.seed(318)
 
     pop = toolbox.population(n=300)
@@ -122,7 +133,7 @@ def main():
     pop, log = algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 40, stats=mstats,
                                    halloffame=hof, verbose=True)
 
-    calculateScore(hof, blackbox_prediction)
+    calculateScore(hof)
 
     return pop, log, hof
 
