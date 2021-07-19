@@ -45,12 +45,11 @@ def fetch_breast_cancer():
 
     return X_train_scaled, X_test_scaled, y_train, y_test
 
+
 def fetch_digits():
     print('Opening digits dataset...')
 
     digits_dataset = load_digits(n_class=2)
-
-    print(digits_dataset)
 
     X = pd.DataFrame(digits_dataset.data, columns=digits_dataset.feature_names)
 
