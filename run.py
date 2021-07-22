@@ -1,4 +1,8 @@
+import statistics
+
+import matplotlib.pyplot
 import numpy as np
+from time import process_time
 import sklearn.metrics
 
 from src.utils import fetch_dataset
@@ -17,6 +21,10 @@ y_test = []
 blackbox_prediction_test = []
 blackbox_prediction_train = []
 toolbox = None
+mlp_time = 0
+time_start = 0
+time_end = 0
+mlp_classifier = None
 
 
 def protectedDiv(left, right):
@@ -64,7 +72,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     pset.addPrimitive(operator.sub, 2)
     pset.addPrimitive(operator.mul, 2)
     pset.addPrimitive(protectedDiv, 2)
-    # pset.addEphemeralConstant("rand101", lambda: random.randint(0, 1))
+    pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -88,9 +96,10 @@ def generatePrimitive(n_parameters: int, black_box_function):
 
 
 def calculateScore(individuals):
-    # print('Calculating Score from MLP and ISGP')
     global blackbox_prediction_test
     hallOfFame = []
+    hof_height_sum = []
+    hof_node_sum = []
 
     for i in individuals:
         func = toolbox.compile(expr=i)
@@ -100,62 +109,110 @@ def calculateScore(individuals):
             y_gp.append(function_result)
 
         gp_f1score = sklearn.metrics.f1_score(blackbox_prediction_test, np.array(y_gp))
-        hallOfFame.append((gp_f1score, i))
+        gp_accuracy_score = sklearn.metrics.accuracy_score(blackbox_prediction_test, np.array(y_gp))
+        hallOfFame.append((gp_f1score, i, gp_accuracy_score))
+
+    for individual in hallOfFame:
+        hof_height_sum.append(individual[1].height)
+        hof_node_sum.append(individual[1].__len__())
 
     hallOfFame.sort(key=lambda x: x[0], reverse=True)
 
     mlp_fscore = sklearn.metrics.f1_score(y_test, blackbox_prediction_test)
+    mlp_accuracy = sklearn.metrics.accuracy_score(y_test, blackbox_prediction_test)
 
-    return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore
+    return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore, hallOfFame[0][2], mlp_accuracy, sum(hof_height_sum)/len(hallOfFame), sum(hof_node_sum)/len(hallOfFame)
 
 
 def executeDecisionTree():
-    dt_classification_test, dt_classification_train = decision_tree.createInstance(X_train, X_test, y_train)
+    dt_classification_test, dt_classification_train, classifier = decision_tree.createInstance(X_train, X_test, y_train)
 
-    return sklearn.metrics.f1_score(blackbox_prediction_test, dt_classification_test)
+    return sklearn.metrics.f1_score(blackbox_prediction_test, dt_classification_test), \
+           sklearn.metrics.accuracy_score(blackbox_prediction_test, dt_classification_test), \
+           classifier
 
 
 def executeGeneticProgramming():
     global X_train
+
     toolbox = generatePrimitive(len(X_train[0]), interpretMLP)
 
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
 
-    # stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
-    # stats_size = tools.Statistics(len)
-    # mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
-    # mstats.register("avg", np.mean)
-    # mstats.register("max", np.max)
-    # mstats.register("std", np.std)
-    # mstats.register("min", np.min)
-
     algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 40, halloffame=hof, verbose=True)
 
     return calculateScore(hof)
 
+
 def generateReport(n_experiments):
-    gp_fscore_sum = 0
-    mlp_fscore_sum = 0
-    dt_fscore_sum = 0
+    gp_fscore_sum = []
+    gp_accuracy_sum = []
+    gp_height_sum = []
+    gp_node_sum = []
+
+    dt_fscore_sum = []
+    dt_accuracy_sum = []
+    dt_height_sum = []
+    dt_node_sum = []
+
+    mlp_fscore_sum = []
+    mlp_accuracy_sum = []
+
     best_gp_fscore = 0
     best_gp_function = None
+    gp_sum_time = 0
+    dt_sum_time = 0
 
-    for i in range(0, n_experiments-1):
-        gp_fscore, gp_function, mlp_fscore = executeGeneticProgramming()
-        dt_fscore = executeDecisionTree()
+    for i in range(0, n_experiments - 1):
+        time_start = process_time()
+        gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node = executeGeneticProgramming()
+        time_end = process_time()
+        gp_sum_time += time_end - time_start
+
+        time_dt_start = process_time()
+        dt_fscore, dt_accuracy, classifier = executeDecisionTree()
+        time_dt_end = process_time()
+        dt_sum_time = time_dt_end - time_dt_start
+        dt_height_sum.append(classifier.get_depth())
+        dt_node_sum.append(classifier.get_n_leaves())
+
+        mlp_fscore_sum.append(mlp_fscore)
+        mlp_accuracy_sum.append(mlp_accuracy)
+
+        gp_fscore_sum.append(gp_fscore)
+        gp_accuracy_sum.append(accuracy_score)
+        gp_height_sum.append(gp_height)
+        gp_node_sum.append(gp_node)
+
+        dt_fscore_sum.append(dt_fscore)
+        dt_accuracy_sum.append(dt_accuracy)
 
         if gp_fscore > best_gp_fscore:
             best_gp_fscore = gp_fscore
             best_gp_function = gp_function
 
-        gp_fscore_sum += gp_fscore
-        mlp_fscore_sum += mlp_fscore
-        dt_fscore_sum += dt_fscore
+    print('Genetic Programming mean f1_score MLP: ', sum(gp_fscore_sum) / n_experiments)
+    print('Genetic Programming mean accuracy_score MLP:', sum(gp_accuracy_sum) / n_experiments)
+    print('Genetic Programming F1_score Std:', statistics.pstdev(gp_fscore_sum))
+    print('Genetic Programming accuracy Std: ', statistics.pstdev(gp_accuracy_sum))
+    print('Genetic Programming Processing time: ', gp_sum_time / n_experiments)
+    print('Genetic Programming mean model size: (', sum(gp_height_sum)/n_experiments,', ', sum(gp_node_sum)/n_experiments, ')')
+    print('Genetic Programming std model size: (', statistics.pstdev(gp_height_sum),', ', statistics.pstdev(gp_node_sum), ')')
 
-    print('Genetic Programming mean f1_score MLP: ', gp_fscore_sum / n_experiments)
-    print('Decision Tree mean f1_score MLP: ', dt_fscore_sum / n_experiments)
-    print('MLP mean f1_score y: ', mlp_fscore_sum / n_experiments)
+    print('Decision Tree mean f1_score MLP: ', sum(dt_fscore_sum) / n_experiments)
+    print('Decision Tree mean accuracy MLP: ', sum(dt_accuracy_sum) / n_experiments)
+    print('Decision Tree F1_score Std: ', statistics.pstdev(dt_fscore_sum))
+    print('Decision Tree accuracy Std: ', statistics.pstdev(dt_accuracy_sum))
+    print('Decision Tree Processing time: ', dt_sum_time / n_experiments)
+    print('Decision Tree mean model size: (', sum(dt_height_sum) / n_experiments, ', ', sum(dt_node_sum) / n_experiments, ')')
+    print('Decision Tree std model size: (', statistics.pstdev(dt_height_sum), ', ', statistics.pstdev(dt_node_sum), ')')
+
+    print('MLP mean f1_score y: ', sum(mlp_fscore_sum) / n_experiments)
+    print('MLP std f1_score y: ', statistics.pstdev(mlp_fscore_sum) / n_experiments)
+    print('MLP mean accuracy y: ', sum(mlp_accuracy_sum) / n_experiments)
+    print('MLP std accuracy y: ', statistics.pstdev(mlp_accuracy_sum) / n_experiments)
+    print('Processing time MLP: ', mlp_time)
 
     nodes, edges, labels = gp.graph(best_gp_function)
 
@@ -174,19 +231,20 @@ def generateReport(n_experiments):
     g.draw("tree.pdf")
 
 
-
 def main():
     # Get global scope variables
-    global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train
+    global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train, mlp_time
 
     # Fetch dataset and set train/test variables
-    X_train, X_test, y_train, y_test = fetch_dataset.fetch_breast_cancer()
+    X_train, X_test, y_train, y_test = fetch_dataset.fetch_digits()
 
     # Execute blackbox algorithm
-    blackbox_prediction_test, blackbox_prediction_train = mlp.createInstance(X_train, X_test, y_train)
+    blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
+                                                                                                   y_train, y_test)
+
 
     # Runs GP along with
-    generateReport(n_experiments = 30)
+    generateReport(n_experiments=30)
 
 
 if __name__ == '__main__':
