@@ -66,4 +66,4 @@ def fetch_digits():
 
 
 if __name__ == '__main__':
-    fetch_digits()
+    fetch_iris()

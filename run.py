@@ -1,9 +1,11 @@
 import statistics
+import time
 
-import matplotlib.pyplot
+import matplotlib.pyplot as plt
 import numpy as np
 from time import process_time
 import sklearn.metrics
+from sklearn import tree
 
 from src.utils import fetch_dataset
 from src.models.classifiers import mlp, decision_tree
@@ -236,14 +238,12 @@ def main():
     global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train, mlp_time
 
     # Fetch dataset and set train/test variables
-    X_train, X_test, y_train, y_test = fetch_dataset.fetch_digits()
+    X_train, X_test, y_train, y_test = fetch_dataset.fetch_breast_cancer()
 
     # Execute blackbox algorithm
     blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
                                                                                                    y_train, y_test)
 
-
-    # Runs GP along with
     generateReport(n_experiments=30)
 
 
