@@ -33,7 +33,6 @@ def protectedDiv(left, right):
     except ZeroDivisionError:
         return 1
 
-
 def evalSymbReg(individual):
     # Transform the tree expression in a callable function
     global toolbox
@@ -46,8 +45,7 @@ def evalSymbReg(individual):
         function_result = int(func(*x) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(y_train, y_pred), individual.height*2
-
+    return sklearn.metrics.f1_score(y_train, y_pred), individual.height*2, individual.__len__()
 
 def interpretMLP(individual):
     # Transform the tree expression in a callable function
@@ -61,7 +59,6 @@ def interpretMLP(individual):
 
     return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred),
 
-
 def generatePrimitive(n_parameters: int, black_box_function):
     global toolbox
 
@@ -72,7 +69,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0))
+    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0, -1.0))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
