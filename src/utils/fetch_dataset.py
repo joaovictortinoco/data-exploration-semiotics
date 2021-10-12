@@ -23,7 +23,7 @@ def fetch_iris():
 
     X_train_scaled = scaler_X.fit_transform(X_train)
     X_test_scaled = scaler_X.transform(X_test)
-
+    print(X_train)
     return X_train_scaled, X_test_scaled, y_train, y_test
 
 
@@ -65,5 +65,21 @@ def fetch_digits():
     return X_train_scaled, X_test_scaled, y_train, y_test
 
 
+def fetch_view_recommendations():
+    view_data = pd.read_csv('./src/utils/views_classification.csv')
+    X = view_data[['Col_Dimension', 'Col_Measure', 'Col_Function', 'Rows', 'Min', 'Max', 'Distinct', 'Null', 'Deviation']]
+    print(X.columns)
+    y = view_data[['Class']]
+    print(y.columns)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    scaler_X = StandardScaler()
+
+    X_train_scaled = scaler_X.fit_transform(X_train)
+    X_test_scaled = scaler_X.transform(X_test)
+
+    return X_train_scaled, X_test_scaled, y_train, y_test
+
 if __name__ == '__main__':
-    fetch_iris()
+    fetch_view_recommendations()
+    # fetch_iris()

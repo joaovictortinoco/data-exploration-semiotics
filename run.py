@@ -1,11 +1,7 @@
 import statistics
-import time
-
-import matplotlib.pyplot as plt
 import numpy as np
 from time import process_time
 import sklearn.metrics
-from sklearn import tree
 
 from src.utils import fetch_dataset
 from src.models.classifiers import mlp, decision_tree
@@ -63,7 +59,7 @@ def interpretMLP(individual):
         function_result = int(func(*x[1]) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred),
+    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), individual.height*2
 
 
 def generatePrimitive(n_parameters: int, black_box_function):
@@ -76,7 +72,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
@@ -239,6 +235,8 @@ def main():
 
     # Fetch dataset and set train/test variables
     X_train, X_test, y_train, y_test = fetch_dataset.fetch_breast_cancer()
+
+    print('Base de treinamento:', X_train, len(X_train))
 
     # Execute blackbox algorithm
     blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
