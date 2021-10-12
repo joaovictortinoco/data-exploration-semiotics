@@ -46,7 +46,7 @@ def evalSymbReg(individual):
         function_result = int(func(*x) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(y_train, y_pred),
+    return sklearn.metrics.f1_score(y_train, y_pred), individual.height*2
 
 
 def interpretMLP(individual):
@@ -59,7 +59,7 @@ def interpretMLP(individual):
         function_result = int(func(*x[1]) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), individual.height*2
+    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred),
 
 
 def generatePrimitive(n_parameters: int, black_box_function):
@@ -234,7 +234,7 @@ def main():
     global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train, mlp_time
 
     # Fetch dataset and set train/test variables
-    X_train, X_test, y_train, y_test = fetch_dataset.fetch_breast_cancer()
+    X_train, X_test, y_train, y_test = fetch_dataset.fetch_iris()
 
     print('Base de treinamento:', X_train, len(X_train))
 
