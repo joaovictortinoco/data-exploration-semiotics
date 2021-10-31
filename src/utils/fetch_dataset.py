@@ -1,4 +1,4 @@
-from sklearn.datasets import load_iris, load_breast_cancer, load_digits
+from sklearn.datasets import load_iris, load_breast_cancer, load_digits, fetch_olivetti_faces, fetch_kddcup99
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
@@ -80,6 +80,25 @@ def fetch_view_recommendations():
 
     return X_train_scaled, X_test_scaled, y_train, y_test
 
+def fetch_kdd():
+    # @TODO: Investigar tipos de dados vindo desta base.
+    kdd_dataset = fetch_kddcup99();
+
+    X = pd.DataFrame(kdd_dataset.data, columns=kdd_dataset.feature_names)
+
+    print(X.info())
+
+    y = kdd_dataset.target
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    scaler_X = StandardScaler()
+
+    X_train_scaled = scaler_X.fit_transform(X_train)
+    X_test_scaled = scaler_X.transform(X_test)
+
+    return X_train_scaled, X_test_scaled, y_train, y_test
+
+
 if __name__ == '__main__':
-    fetch_view_recommendations()
-    # fetch_iris()
+    fetch_iris()

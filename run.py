@@ -45,7 +45,7 @@ def evalSymbReg(individual):
         function_result = int(func(*x) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(y_train, y_pred), individual.height*2, individual.__len__()
+    return sklearn.metrics.f1_score(y_train, y_pred), individual.__len__()*2
 
 def interpretMLP(individual):
     # Transform the tree expression in a callable function
@@ -79,7 +79,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     toolbox.register("compile", gp.compile, pset=pset)
 
     toolbox.register("evaluate", black_box_function)
-    toolbox.register("select", tools.selTournament, tournsize=3)
+    toolbox.register("select", tools.selNSGA2)
     toolbox.register("mate", gp.cxOnePoint)
     toolbox.register("expr_mut", gp.genFull, min_=0, max_=2)
     toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
