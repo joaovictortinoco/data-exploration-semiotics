@@ -1,4 +1,6 @@
 import statistics
+
+import deap.gp
 import numpy as np
 from time import process_time
 import sklearn.metrics
@@ -33,31 +35,24 @@ def protectedDiv(left, right):
     except ZeroDivisionError:
         return 1
 
-def evalSymbReg(individual):
-    # Transform the tree expression in a callable function
-    global toolbox
-    global y_train
-    func = toolbox.compile(expr=individual)
-
-    y_pred = []
-
-    for x in enumerate(X_train):
-        function_result = int(func(*x) > 0.5)
-        y_pred.append(function_result)
-
-    return sklearn.metrics.f1_score(y_train, y_pred), individual.__len__()*2
 
 def interpretMLP(individual):
     # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
-
+    split_points = 0
+    for i in individual.copy():
+        split_points += i.arity if type(i) is deap.gp.Primitive else 0
     y_pred = []
 
     for x in enumerate(X_train):
         function_result = int(func(*x[1]) > 0.5)
         y_pred.append(function_result)
 
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred),
+    avgTreeLength = individual.height/split_points if split_points != 0 else 0
+    ratio = individual.height/individual.height+split_points if split_points != 0 else 0
+
+    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), avgTreeLength, ratio
+
 
 def generatePrimitive(n_parameters: int, black_box_function):
     global toolbox
@@ -69,7 +64,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0, -1.0))
+    creator.create("FitnessMax", base.Fitness, weights=(1.0, 1.0, -1.0))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
@@ -84,13 +79,13 @@ def generatePrimitive(n_parameters: int, black_box_function):
     toolbox.register("expr_mut", gp.genFull, min_=0, max_=2)
     toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
-    toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
-    toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
+    toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=50))
+    toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=50))
 
     return toolbox
 
 
-def calculateScore(individuals):
+def calculateScore(individuals, pareto):
     global blackbox_prediction_test
     hallOfFame = []
     hof_height_sum = []
@@ -116,7 +111,10 @@ def calculateScore(individuals):
     mlp_fscore = sklearn.metrics.f1_score(y_test, blackbox_prediction_test)
     mlp_accuracy = sklearn.metrics.accuracy_score(y_test, blackbox_prediction_test)
 
-    return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore, hallOfFame[0][2], mlp_accuracy, sum(hof_height_sum)/len(hallOfFame), sum(hof_node_sum)/len(hallOfFame)
+    return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore, hallOfFame[0][2], \
+           mlp_accuracy, \
+           sum(hof_height_sum) / len(hallOfFame), sum(hof_node_sum) / len(hallOfFame), \
+           pareto,
 
 
 def executeDecisionTree():
@@ -129,18 +127,21 @@ def executeDecisionTree():
 
 def executeGeneticProgramming():
     global X_train
+    pareto = tools.ParetoFront()
 
     toolbox = generatePrimitive(len(X_train[0]), interpretMLP)
 
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
 
-    algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 40, halloffame=hof, verbose=True)
+    algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 20, halloffame=hof, verbose=True)
 
-    return calculateScore(hof)
+    pareto.update(pop)
+
+    return calculateScore(hof, pareto),
 
 
-def generateReport(n_experiments):
+def generateReport(n_experiments, best_pareto=None):
     gp_fscore_sum = []
     gp_accuracy_sum = []
     gp_height_sum = []
@@ -158,10 +159,12 @@ def generateReport(n_experiments):
     best_gp_function = None
     gp_sum_time = 0
     dt_sum_time = 0
+    best_pareto
 
     for i in range(0, n_experiments - 1):
         time_start = process_time()
-        gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node = executeGeneticProgramming()
+        gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node, pareto_ = \
+            executeGeneticProgramming()[0]
         time_end = process_time()
         gp_sum_time += time_end - time_start
 
@@ -186,22 +189,27 @@ def generateReport(n_experiments):
         if gp_fscore > best_gp_fscore:
             best_gp_fscore = gp_fscore
             best_gp_function = gp_function
+            best_pareto = pareto_
 
     print('Genetic Programming mean f1_score MLP: ', sum(gp_fscore_sum) / n_experiments)
     print('Genetic Programming mean accuracy_score MLP:', sum(gp_accuracy_sum) / n_experiments)
     print('Genetic Programming F1_score Std:', statistics.pstdev(gp_fscore_sum))
     print('Genetic Programming accuracy Std: ', statistics.pstdev(gp_accuracy_sum))
     print('Genetic Programming Processing time: ', gp_sum_time / n_experiments)
-    print('Genetic Programming mean model size: (', sum(gp_height_sum)/n_experiments,', ', sum(gp_node_sum)/n_experiments, ')')
-    print('Genetic Programming std model size: (', statistics.pstdev(gp_height_sum),', ', statistics.pstdev(gp_node_sum), ')')
+    print('Genetic Programming mean model size: (', sum(gp_height_sum) / n_experiments, ', ',
+          sum(gp_node_sum) / n_experiments, ')')
+    print('Genetic Programming std model size: (', statistics.pstdev(gp_height_sum), ', ',
+          statistics.pstdev(gp_node_sum), ')')
 
     print('Decision Tree mean f1_score MLP: ', sum(dt_fscore_sum) / n_experiments)
     print('Decision Tree mean accuracy MLP: ', sum(dt_accuracy_sum) / n_experiments)
     print('Decision Tree F1_score Std: ', statistics.pstdev(dt_fscore_sum))
     print('Decision Tree accuracy Std: ', statistics.pstdev(dt_accuracy_sum))
     print('Decision Tree Processing time: ', dt_sum_time / n_experiments)
-    print('Decision Tree mean model size: (', sum(dt_height_sum) / n_experiments, ', ', sum(dt_node_sum) / n_experiments, ')')
-    print('Decision Tree std model size: (', statistics.pstdev(dt_height_sum), ', ', statistics.pstdev(dt_node_sum), ')')
+    print('Decision Tree mean model size: (', sum(dt_height_sum) / n_experiments, ', ',
+          sum(dt_node_sum) / n_experiments, ')')
+    print('Decision Tree std model size: (', statistics.pstdev(dt_height_sum), ', ', statistics.pstdev(dt_node_sum),
+          ')')
 
     print('MLP mean f1_score y: ', sum(mlp_fscore_sum) / n_experiments)
     print('MLP std f1_score y: ', statistics.pstdev(mlp_fscore_sum) / n_experiments)
@@ -209,10 +217,9 @@ def generateReport(n_experiments):
     print('MLP std accuracy y: ', statistics.pstdev(mlp_accuracy_sum) / n_experiments)
     print('Processing time MLP: ', mlp_time)
 
-    nodes, edges, labels = gp.graph(best_gp_function)
-
-    ### Graphviz Section ###
     import pygraphviz as pgv
+
+    nodes, edges, labels = gp.graph(best_gp_function)
 
     g = pgv.AGraph()
     g.add_nodes_from(nodes)
@@ -223,7 +230,22 @@ def generateReport(n_experiments):
         n = g.get_node(i)
         n.attr["label"] = labels[i]
 
-    g.draw("tree.pdf")
+    g.draw("tree_hall_of_fame.pdf")
+
+    pareto_draw = sorted(best_pareto.items, key=lambda i: i.__len__())[0]
+
+    nodes, edges, labels = gp.graph(pareto_draw)
+
+    g = pgv.AGraph()
+    g.add_nodes_from(nodes)
+    g.add_edges_from(edges)
+    g.layout(prog="dot")
+
+    for i in nodes:
+        n = g.get_node(i)
+        n.attr["label"] = labels[i]
+
+    g.draw("tree_pareto.pdf")
 
 
 def main():
@@ -232,8 +254,6 @@ def main():
 
     # Fetch dataset and set train/test variables
     X_train, X_test, y_train, y_test = fetch_dataset.fetch_iris()
-
-    print('Base de treinamento:', X_train, len(X_train))
 
     # Execute blackbox algorithm
     blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
