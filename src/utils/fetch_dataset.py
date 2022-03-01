@@ -4,7 +4,6 @@ from sklearn.preprocessing import StandardScaler
 import numpy as np
 import pandas as pd
 
-
 def fetch_iris():
     print('Opening iris dataset...')
     iris_dataset = load_iris()
@@ -47,11 +46,7 @@ def fetch_breast_cancer():
     return X_train_scaled, X_test_scaled, y_train, y_test
 
 
-def fetch_digits():
-    print('Opening digits dataset...')
-
-    targetNumber1 = 3
-    targetNumber2 = 7
+def fetch_digits(targetNumber1, targetNumber2):
 
     digits_dataset = load_digits()
 
@@ -109,6 +104,7 @@ def fetch_kdd():
 
     return X_train_scaled, X_test_scaled, y_train, y_test
 
+
 def fetch_ionosphere():
     load_ionosphere = pd.read_csv('https://archive.ics.uci.edu/ml/machine-learning-databases/ionosphere/ionosphere.data')
     X = load_ionosphere.iloc[:,0:34]
@@ -144,5 +140,24 @@ def fetch_wine():
 
     return X_train_scaled, X_test_scaled, y_train, y_test
 
+
+def fetch_banknotes():
+    load_banknotes = pd.read_csv('./src/utils/data_banknote_authentication.txt', sep=',')
+    X = load_banknotes.iloc[:,0:4]
+    y = load_banknotes.iloc[:,4]
+
+    y = y.astype('int')
+    X = X.astype('double')
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    scaler_X = StandardScaler()
+
+    X_train_scaled = scaler_X.fit_transform(X_train)
+    X_test_scaled = scaler_X.transform(X_test)
+
+    return X_train_scaled, X_test_scaled, y_train, y_test
+
+
 if __name__ == '__main__':
-    fetch_ionosphere()
+    fetch_banknotes()
