@@ -26,6 +26,8 @@ mlp_time = 0
 time_start = 0
 time_end = 0
 mlp_classifier = None
+dataset_name = ''
+logbook = tools.Logbook()
 
 
 def protectedDiv(left, right):
@@ -37,34 +39,7 @@ def protectedDiv(left, right):
         return 1
 
 
-# Evaluate fitness of an individual within a generation.
-def interpretMLP(individual):
-    func = toolbox.compile(expr=individual)
-    split_points = 0
-    countDivision = 0
-    countMult = 0
-    countPrimitive = 0
-    countTerminals = 0
-    for i in individual.copy():
-        split_points += i.arity if type(i) == deap.gp.Primitive else 0
-        countPrimitive += 1 if type(i) == deap.gp.Primitive else 0
-        countTerminals += 1 if type(i) == deap.gp.Terminal else 0
-        countDivision += 1 if type(i) == deap.gp.Primitive and i.name == 'protectedDiv' else 0
-        countMult += 1 if type(i) == deap.gp.Primitive and i.name == 'mul' else 0
-    y_pred = []
-
-    for x in enumerate(X_train):
-        function_result = int(func(*x[1]) > 0.5)
-        y_pred.append(function_result)
-
-    avgTreeLength = individual.__len__()/split_points if split_points != 0 else 0
-    ari = (countTerminals * countPrimitive) + split_points
-    complextTerminals = countDivision + countMult
-
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), avgTreeLength, ari, complextTerminals
-
-
-def generatePrimitive(n_parameters: int, black_box_function):
+def setUpGP(n_parameters: int, black_box_function):
     global toolbox
 
     pset = gp.PrimitiveSet("MAIN", n_parameters)
@@ -74,7 +49,7 @@ def generatePrimitive(n_parameters: int, black_box_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0, -1.0, -1.0))
+    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0, -1.0))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
@@ -95,6 +70,47 @@ def generatePrimitive(n_parameters: int, black_box_function):
     return toolbox
 
 
+def interpretMLP(individual):
+    # Evaluate fitness of an individual within a generation.
+    import math
+    func = toolbox.compile(expr=individual)
+    split_points = 0
+    countDivision = 0
+    countMult = 0
+    countPrimitive = 0
+    countTerminals = 0
+    complexity = 0
+    for i in individual.copy():
+        split_points += i.arity if type(i) == deap.gp.Primitive else 0
+        countPrimitive += 1 if type(i) == deap.gp.Primitive else 0
+        complexity += getComplexityFactor(i.name) if type(i) == deap.gp.Primitive else 0
+        countTerminals += 1 if type(i) == deap.gp.Terminal else 0
+        countDivision += 1 if type(i) == deap.gp.Primitive and i.name == 'protectedDiv' else 0
+        countMult += 1 if type(i) == deap.gp.Primitive and i.name == 'mul' else 0
+    y_pred = []
+
+    for x in enumerate(X_train):
+        function_result = int(func(*x[1]) > 0.5)
+        y_pred.append(function_result)
+
+    # avgTreeLength = individual.__len__() / split_points if split_points != 0 else 0
+    ari = 1 / (1 + math.exp(-(countTerminals * countPrimitive)))
+    complextTerminals = 1 / (1 + math.exp(-complexity))
+
+    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), ari, complextTerminals
+
+
+def getComplexityFactor(primitive):
+    if primitive == 'add':
+        return 1
+    elif primitive == 'sub':
+        return 1
+    elif primitive == 'mul':
+        return 5
+    elif primitive == 'protectedDiv':
+        return 10
+
+# Calculates score for test dataset in comparison with black-box
 def calculateScore(individuals, pareto):
     global blackbox_prediction_test
     hallOfFame = []
@@ -127,49 +143,47 @@ def calculateScore(individuals, pareto):
            pareto,
 
 
-def executeDecisionTree():
-    dt_classification_test, dt_classification_train, classifier = decision_tree.createInstance(X_train, X_test, y_train)
-
-    return sklearn.metrics.f1_score(blackbox_prediction_test, dt_classification_test), \
-           sklearn.metrics.accuracy_score(blackbox_prediction_test, dt_classification_test), \
-           classifier
-
-
 def executeGeneticProgramming():
     global X_train
+    global logbook
     pareto = tools.ParetoFront()
+    generation = 40
 
-    toolbox = generatePrimitive(len(X_train[0]), interpretMLP)
+    toolbox = setUpGP(len(X_train[0]), interpretMLP)
 
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
     fscore_stats = tools.Statistics(lambda ind: ind.fitness.values[0])
-    avgTree_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-    ari_stats = tools.Statistics(lambda ind: ind.fitness.values[2])
-    complexTerminals_stats = tools.Statistics(lambda ind: ind.fitness.values[3])
-    mstats = tools.MultiStatistics(fscore_stats=fscore_stats, avgTree_stats=avgTree_stats, ari_stats=ari_stats, complexTerminals_stats=complexTerminals_stats)
+    # avgTree_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
+    ari_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
+    complexTerminals_stats = tools.Statistics(lambda ind: ind.fitness.values[2])
+    mstats = tools.MultiStatistics(fscore_stats=fscore_stats, ari_stats=ari_stats,
+                                   complexTerminals_stats=complexTerminals_stats)
     mstats.register("avg", numpy.mean)
     mstats.register("std", numpy.std)
     mstats.register("min", numpy.min)
     mstats.register("max", numpy.max)
 
-    algorithms.eaSimple(pop, toolbox, 0.5, 0.1, 40, mstats, halloffame=hof, verbose=True)
+    logbook.header = ["gen", "evals"] + mstats.fields
 
+    algorithms.eaSimple(pop, toolbox, 0.5, 0.1, generation, mstats, halloffame=hof, verbose=True)
     pareto.update(pop)
 
+    # Gather all the fitness in one list and print the stats
+    logbook.record(gen=generation, evals=len(pop), **mstats.compile(pop))
+    print(logbook.stream)
     return calculateScore(hof, pareto),
 
 
 def generateReport(n_experiments, best_pareto=None):
+    import pandas as pd
+    global logbook
+    global dataset_name
+
     gp_fscore_sum = []
     gp_accuracy_sum = []
     gp_height_sum = []
     gp_node_sum = []
-
-    dt_fscore_sum = []
-    dt_accuracy_sum = []
-    dt_height_sum = []
-    dt_node_sum = []
 
     mlp_fscore_sum = []
     mlp_accuracy_sum = []
@@ -180,7 +194,7 @@ def generateReport(n_experiments, best_pareto=None):
     dt_sum_time = 0
     best_pareto
     accumulatedPareto = []
-    for i in range(0, n_experiments - 1):
+    for i in range(0, n_experiments):
         time_start = process_time()
         gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node, pareto_ = \
             executeGeneticProgramming()[0]
@@ -188,13 +202,6 @@ def generateReport(n_experiments, best_pareto=None):
         gp_sum_time += time_end - time_start
 
         accumulatedPareto.append(pareto_)
-
-        time_dt_start = process_time()
-        dt_fscore, dt_accuracy, classifier = executeDecisionTree()
-        time_dt_end = process_time()
-        dt_sum_time = time_dt_end - time_dt_start
-        dt_height_sum.append(classifier.get_depth())
-        dt_node_sum.append(classifier.get_n_leaves())
 
         mlp_fscore_sum.append(mlp_fscore)
         mlp_accuracy_sum.append(mlp_accuracy)
@@ -204,45 +211,28 @@ def generateReport(n_experiments, best_pareto=None):
         gp_height_sum.append(gp_height)
         gp_node_sum.append(gp_node)
 
-        dt_fscore_sum.append(dt_fscore)
-        dt_accuracy_sum.append(dt_accuracy)
-
         if gp_fscore > best_gp_fscore:
             best_gp_fscore = gp_fscore
             best_gp_function = gp_function
             best_pareto = pareto_
 
-    # generateTree(best_gp_function, best_pareto)
+    results_log = [{
+        'mlp_fscore': sum(mlp_fscore_sum) / n_experiments,
+        'mlp_fscore_std': statistics.pstdev(mlp_fscore_sum),
+        'gp_fscore_avg': sum(gp_fscore_sum) / n_experiments,
+        'gp_fscore_std': statistics.pstdev(gp_fscore_sum),
+        'total_pareto': best_pareto.items.__len__()
+    }]
+    df_logbook = pd.DataFrame(results_log)
+    df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
     generateParetoCharts(accumulatedPareto)
-    print('Genetic Programming mean f1_score MLP: ', sum(gp_fscore_sum) / n_experiments)
-    print('Genetic Programming mean accuracy_score MLP:', sum(gp_accuracy_sum) / n_experiments)
-    print('Genetic Programming F1_score Std:', statistics.pstdev(gp_fscore_sum))
-    print('Genetic Programming accuracy Std: ', statistics.pstdev(gp_accuracy_sum))
-    print('Genetic Programming Processing time: ', gp_sum_time / n_experiments)
-    print('Genetic Programming mean model size: (', sum(gp_height_sum) / n_experiments, ', ',
-          sum(gp_node_sum) / n_experiments, ')')
-    print('Genetic Programming std model size: (', statistics.pstdev(gp_height_sum), ', ',
-          statistics.pstdev(gp_node_sum), ')')
-
-    print('Decision Tree mean f1_score MLP: ', sum(dt_fscore_sum) / n_experiments)
-    print('Decision Tree mean accuracy MLP: ', sum(dt_accuracy_sum) / n_experiments)
-    print('Decision Tree F1_score Std: ', statistics.pstdev(dt_fscore_sum))
-    print('Decision Tree accuracy Std: ', statistics.pstdev(dt_accuracy_sum))
-    print('Decision Tree Processing time: ', dt_sum_time / n_experiments)
-    print('Decision Tree mean model size: (', sum(dt_height_sum) / n_experiments, ', ',
-          sum(dt_node_sum) / n_experiments, ')')
-    print('Decision Tree std model size: (', statistics.pstdev(dt_height_sum), ', ', statistics.pstdev(dt_node_sum),
-          ')')
-
-    print('MLP mean f1_score y: ', sum(mlp_fscore_sum) / n_experiments)
-    print('MLP std f1_score y: ', statistics.pstdev(mlp_fscore_sum) / n_experiments)
-    print('MLP mean accuracy y: ', sum(mlp_accuracy_sum) / n_experiments)
-    print('MLP std accuracy y: ', statistics.pstdev(mlp_accuracy_sum) / n_experiments)
-    # print('Processing time MLP: ', mlp_time)
+    generateTree(best_pareto)
 
 
 def generateParetoCharts(paretos):
     import matplotlib.pyplot as plt
+    import math
+    global dataset_name
 
     fscoreData = []
     avgTreeData = []
@@ -250,39 +240,35 @@ def generateParetoCharts(paretos):
     complexTermData = []
     for p in paretos:
         for i in p.items:
-            fscore, avgTreeLength, ari, complexTerminals = interpretMLP(i)
+            fscore, ari, complexTerminals = interpretMLP(i)
             fscoreData.append(fscore)
-            avgTreeData.append(avgTreeLength)
+            # avgTreeData.append(avgTreeLength)
             ariData.append(ari)
             complexTermData.append(complexTerminals)
 
-    ax = plt.axes(projection='3d')
-    zline = complexTermData
-    xline = ariData
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    xline = complexTermData
+    zline = ariData
     yline = fscoreData
-    ax.scatter(xline, yline, zline, c=zline, label=['ari', 'fscore', 'complexTerminals'], cmap='viridis', lineWidth=0.5)
-    ax.set_xlabel('ari', fontweight='bold')
+    ax.scatter(xline, yline, zline, c='red', label=['complex terminals', 'fscore', 'ari'], lineWidth=0.5)
+    ax.set_xlabel('complex terminals', fontweight='bold')
     ax.set_ylabel('fscore', fontweight='bold')
-    ax.set_zlabel('complex terminals', fontweight='bold')
+    ax.set_zlabel('ari', fontweight='bold')
 
-    fig, ax = plt.subplots()
-    ax.plot(avgTreeData, fscoreData, 'ro')
+    plt.savefig("pareto_results/" + dataset_name + "/pareto_front.png")
 
-    ax.set(xlabel='avg tree length', ylabel='fscore',
-           title='')
-    ax.grid()
-
-    fig.savefig("pareto_results/avgTreeLength.png")
-    plt.show()
+    # plt.show()
 
     fig1, ax1 = plt.subplots()
     ax1.plot(ariData, fscoreData, 'ro')
 
     ax1.set(xlabel='automated readability index', ylabel='fscore',
-           title='')
+            title='')
     ax1.grid()
 
-    fig1.savefig("pareto_results/ari.png")
+    fig1.savefig("pareto_results/" + dataset_name + "/ari.png")
     plt.show()
 
     fig2, ax2 = plt.subplots()
@@ -292,13 +278,13 @@ def generateParetoCharts(paretos):
             title='')
     ax2.grid()
 
-    fig2.savefig("pareto_results/complexTerminals.png")
-    plt.show()
+    fig2.savefig("pareto_results/" + dataset_name + "/complexTerminals.png")
+    # plt.show()
 
 
-def generateTree(best_gp_function, best_pareto):
+def generateTree(best_pareto):
     import pygraphviz as pgv
-
+    global dataset_name
     # nodes, edges, labels = gp.graph(best_gp_function)
     #
     # g = pgv.AGraph()
@@ -326,14 +312,31 @@ def generateTree(best_gp_function, best_pareto):
             n = g.get_node(i)
             n.attr["label"] = labels[i]
 
-        g.draw("pareto_results/tree_pareto_" + str(pareto_draw.index(i_pareto)) + ".pdf")
+        g.draw("pareto_results/" + dataset_name + "/tree_pareto_" + str(pareto_draw.index(i_pareto)) + ".pdf")
 
-def main():
+
+def main(dataset):
     # Get global scope variables
     global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train, mlp_time
 
-    # Fetch dataset and set train/test variables
-    X_train, X_test, y_train, y_test = fetch_dataset.fetch_ionosphere()
+    if dataset == 'ionosphere':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_ionosphere()
+    elif dataset == 'breast_cancer':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_breast_cancer()
+    elif dataset == 'digits1_7':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_digits(1, 7)
+    elif dataset == 'digits3_9':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_digits(3, 9)
+    elif dataset == 'wine':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_wine()
+    elif dataset == 'banknotes':
+        # Fetch dataset and set train/test variables
+        X_train, X_test, y_train, y_test = fetch_dataset.fetch_banknotes()
 
     # Execute blackbox algorithm
     blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
@@ -343,4 +346,26 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    time_start = process_time()
+
+    # dataset_name = 'wine'
+    # main(dataset_name)
+
+    # dataset_name = 'ionosphere'
+    # main(dataset_name)
+
+    # dataset_name = 'breast_cancer'
+    # main(dataset_name)
+    #
+    # dataset_name = 'digits1_7'
+    # main(dataset_name)
+    #
+    # dataset_name = 'digits3_9'
+    # main(dataset_name)
+    #
+    # dataset_name = 'banknotes'
+    # main(dataset_name)
+
+    time_end = process_time()
+
+    print(time_end - time_start)
