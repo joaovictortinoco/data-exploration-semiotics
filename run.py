@@ -49,7 +49,7 @@ def setUpGP(n_parameters: int, black_box_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0, -1.0))
+    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0))
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
@@ -82,11 +82,11 @@ def interpretMLP(individual):
     complexity = 0
     for i in individual.copy():
         split_points += i.arity if type(i) == deap.gp.Primitive else 0
-        countPrimitive += 1 if type(i) == deap.gp.Primitive else 0
-        complexity += getComplexityFactor(i.name) if type(i) == deap.gp.Primitive else 0
-        countTerminals += 1 if type(i) == deap.gp.Terminal else 0
-        countDivision += 1 if type(i) == deap.gp.Primitive and i.name == 'protectedDiv' else 0
-        countMult += 1 if type(i) == deap.gp.Primitive and i.name == 'mul' else 0
+        # countPrimitive += 1 if type(i) == deap.gp.Primitive else 0
+        # complexity += getComplexityFactor(i.name) if type(i) == deap.gp.Primitive else 0
+        # countTerminals += 1 if type(i) == deap.gp.Terminal else 0
+        # countDivision += 1 if type(i) == deap.gp.Primitive and i.name == 'protectedDiv' else 0
+        # countMult += 1 if type(i) == deap.gp.Primitive and i.name == 'mul' else 0
     y_pred = []
 
     for x in enumerate(X_train):
@@ -94,10 +94,11 @@ def interpretMLP(individual):
         y_pred.append(function_result)
 
     # avgTreeLength = individual.__len__() / split_points if split_points != 0 else 0
-    ari = 1 / (1 + math.exp(-(countTerminals * countPrimitive)))
-    complextTerminals = 1 / (1 + math.exp(-complexity))
+    # ari = 1 / (1 + math.exp(-(countTerminals * countPrimitive)))
+    # complextTerminals = 1 / (1 + math.exp(-complexity))
+    split = 1 / (1 + math.exp(-split_points))
 
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), ari, complextTerminals
+    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), split
 
 
 def getComplexityFactor(primitive):
@@ -109,6 +110,7 @@ def getComplexityFactor(primitive):
         return 5
     elif primitive == 'protectedDiv':
         return 10
+
 
 # Calculates score for test dataset in comparison with black-box
 def calculateScore(individuals, pareto):
@@ -154,11 +156,11 @@ def executeGeneticProgramming():
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
     fscore_stats = tools.Statistics(lambda ind: ind.fitness.values[0])
+    split_points_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
     # avgTree_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-    ari_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-    complexTerminals_stats = tools.Statistics(lambda ind: ind.fitness.values[2])
-    mstats = tools.MultiStatistics(fscore_stats=fscore_stats, ari_stats=ari_stats,
-                                   complexTerminals_stats=complexTerminals_stats)
+    # ari_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
+    # complexTerminals_stats = tools.Statistics(lambda ind: ind.fitness.values[2])
+    mstats = tools.MultiStatistics(fscore_stats=fscore_stats, split_points_stats=split_points_stats)
     mstats.register("avg", numpy.mean)
     mstats.register("std", numpy.std)
     mstats.register("min", numpy.min)
@@ -235,51 +237,49 @@ def generateParetoCharts(paretos):
     global dataset_name
 
     fscoreData = []
-    avgTreeData = []
-    ariData = []
-    complexTermData = []
+    splitData = []
+
     for p in paretos:
         for i in p.items:
-            fscore, ari, complexTerminals = interpretMLP(i)
+            fscore, split_points = interpretMLP(i)
             fscoreData.append(fscore)
-            # avgTreeData.append(avgTreeLength)
-            ariData.append(ari)
-            complexTermData.append(complexTerminals)
+            splitData.append(split_points)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
 
-    xline = complexTermData
-    zline = ariData
-    yline = fscoreData
-    ax.scatter(xline, yline, zline, c='red', label=['complex terminals', 'fscore', 'ari'], lineWidth=0.5)
-    ax.set_xlabel('complex terminals', fontweight='bold')
-    ax.set_ylabel('fscore', fontweight='bold')
-    ax.set_zlabel('ari', fontweight='bold')
+    # xline = complexTermData
+    # zline = ariData
+    # yline = fscoreData
+    # ax.scatter(xline, yline, zline, c='red', label=['complex terminals', 'fscore', 'ari'], lineWidth=0.5)
+    # ax.set_xlabel('complex terminals', fontweight='bold')
+    # ax.set_ylabel('fscore', fontweight='bold')
+    # ax.set_zlabel('ari', fontweight='bold')
 
-    plt.savefig("pareto_results/" + dataset_name + "/pareto_front.png")
+    # plt.savefig("pareto_results/" + dataset_name + "/pareto_front.png")
 
     # plt.show()
 
     fig1, ax1 = plt.subplots()
-    ax1.plot(ariData, fscoreData, 'ro')
+    ax1.plot(splitData, fscoreData, 'ro')
 
-    ax1.set(xlabel='automated readability index', ylabel='fscore',
+    ax1.set(xlabel='split_points', ylabel='fscore',
             title='')
     ax1.grid()
+    plt.savefig("pareto_results/" + dataset_name + "/split_points.png")
 
-    fig1.savefig("pareto_results/" + dataset_name + "/ari.png")
-    plt.show()
-
-    fig2, ax2 = plt.subplots()
-    ax2.plot(complexTermData, fscoreData, 'ro')
-
-    ax2.set(xlabel='complex terminals', ylabel='fscore',
-            title='')
-    ax2.grid()
-
-    fig2.savefig("pareto_results/" + dataset_name + "/complexTerminals.png")
+    # fig1.savefig("pareto_results/" + dataset_name + "/ari.png")
     # plt.show()
+    #
+    # fig2, ax2 = plt.subplots()
+    # ax2.plot(complexTermData, fscoreData, 'ro')
+    #
+    # ax2.set(xlabel='complex terminals', ylabel='fscore',
+    #         title='')
+    # ax2.grid()
+    #
+    # fig2.savefig("pareto_results/" + dataset_name + "/complexTerminals.png")
+    # # plt.show()
 
 
 def generateTree(best_pareto):
@@ -360,8 +360,8 @@ if __name__ == '__main__':
     # dataset_name = 'digits1_7'
     # main(dataset_name)
     #
-    # dataset_name = 'digits3_9'
-    # main(dataset_name)
+    dataset_name = 'digits3_9'
+    main(dataset_name)
     #
     # dataset_name = 'banknotes'
     # main(dataset_name)
