@@ -217,43 +217,45 @@ def generateReport(n_experiments, best_pareto=None):
             best_pareto = pareto_
 
     fit_max = logbook.chapters["fscore_stats"].select("max")
-
+    print("============================FIT_MAX SIMPLICITY============================", fit_max)
     import matplotlib.pyplot as plt
 
     fig, ax1 = plt.subplots()
-    ax1.plot(range(0, 30), fit_max, "b-", label="Maximum Fitness")
+    ax1.plot(range(0, n_experiments), fit_max, "r-", label="Maximum Fitness")
     ax1.set_xlabel("Experiments")
-    ax1.set_ylabel("F1-Score", color="b")
+    ax1.set_ylabel("F1-Score")
     for tl in ax1.get_yticklabels():
         tl.set_color("b")
     plt.savefig("pareto_results/" + dataset_name + "/fscore.png")
+
+    fscoreData = []
+    simplicityData = []
+
+    for p in accumulatedPareto:
+        for i in p.items:
+            fscore, simplicity = fitness_function(i)
+            fscoreData.append(fscore)
+            simplicityData.append(simplicity)
 
     results_log = [{
         'mlp_fscore': sum(mlp_fscore_sum) / n_experiments,
         'mlp_fscore_std': statistics.pstdev(mlp_fscore_sum),
         'gp_fscore_avg': sum(gp_fscore_sum) / n_experiments,
         'gp_fscore_std': statistics.pstdev(gp_fscore_sum),
-        'total_pareto': best_pareto.items.__len__()
+        'total_pareto': best_pareto.items.__len__(),
+        'fit_max': fit_max,
+        'fscore_data': fscoreData,
+        'simplicity_data': simplicityData,
     }]
     df_logbook = pd.DataFrame(results_log)
     df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
-    generateParetoCharts(accumulatedPareto)
+    generateParetoCharts(fscoreData, simplicityData)
     # generateTree(best_pareto)
 
 
-def generateParetoCharts(paretos):
+def generateParetoCharts(fscoreData, simplicityData):
     import matplotlib.pyplot as plt
     global dataset_name
-
-    fscoreData = []
-    simplicityData = []
-
-    for p in paretos:
-        for i in p.items:
-            fscore, simplicity = fitness_function(i)
-            fscoreData.append(fscore)
-            # avgTreeData.append(avgTreeLength)
-            simplicityData.append(simplicity)
 
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
@@ -271,14 +273,16 @@ def generateParetoCharts(paretos):
     # plt.show()
 
     fig1, ax1 = plt.subplots()
-    ax1.plot(simplicityData, fscoreData, 'ro')
+    print("============================SIMPLICITY_DATA============================", simplicityData)
+    print("============================FSCORE_DATA============================", fscoreData)
+    ax1.plot(simplicityData, fscoreData, 'gx')
 
     ax1.set(xlabel='simplicity', ylabel='fscore',
             title='')
     ax1.grid()
 
     fig1.savefig("pareto_results/" + dataset_name + "/simplicity.png")
-    plt.show()
+    # plt.show()
 
     # fig2, ax2 = plt.subplots()
     # ax2.plot(complexTermData, fscoreData, 'ro')
@@ -360,18 +364,18 @@ if __name__ == '__main__':
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    # dataset_name = 'ionosphere'
-    # main(dataset_name)
-
-    dataset_name = 'breast_cancer'
+    dataset_name = 'ionosphere'
     main(dataset_name)
+
+    # dataset_name = 'breast_cancer'
+    # main(dataset_name)
 
     # dataset_name = 'digits1_7'
     # main(dataset_name)
-    #
+
     # dataset_name = 'digits3_9'
     # main(dataset_name)
-    #
+
     # dataset_name = 'banknotes'
     # main(dataset_name)
 
