@@ -7,7 +7,7 @@ from time import process_time
 import sklearn.metrics
 
 from src.utils import fetch_dataset
-from src.models.classifiers import mlp, decision_tree
+from src.models.classifiers import mlp
 
 import operator
 
@@ -19,8 +19,8 @@ X_train = []
 X_test = []
 y_train = []
 y_test = []
-blackbox_prediction_test = []
-blackbox_prediction_train = []
+opaque_model_prediction_test = []
+opaque_model_prediction_train = []
 toolbox = None
 mlp_time = 0
 time_start = 0
@@ -39,7 +39,7 @@ def protectedDiv(left, right):
         return 1
 
 
-def setUpGP(n_parameters: int, black_box_function):
+def setUpGP(n_parameters: int, evaluate_function):
     global toolbox
 
     pset = gp.PrimitiveSet("MAIN", n_parameters)
@@ -58,7 +58,7 @@ def setUpGP(n_parameters: int, black_box_function):
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("compile", gp.compile, pset=pset)
 
-    toolbox.register("evaluate", black_box_function)
+    toolbox.register("evaluate", evaluate_function)
     toolbox.register("select", tools.selNSGA2)
     toolbox.register("mate", gp.cxOnePoint)
     toolbox.register("expr_mut", gp.genFull, min_=0, max_=2)
@@ -70,7 +70,7 @@ def setUpGP(n_parameters: int, black_box_function):
     return toolbox
 
 
-def interpretMLP(individual):
+def fitness_function(individual):
     # Evaluate fitness of an individual within a generation.
     import math
     func = toolbox.compile(expr=individual)
@@ -114,8 +114,10 @@ def getComplexityFactor(primitive):
 
 # Calculates score for test dataset in comparison with black-box
 def calculateScore(individuals, pareto):
-    global blackbox_prediction_test
+    global opaque_model_prediction_test
     hallOfFame = []
+    f1_score_list = []
+    f1_score_sum = 0
     hof_height_sum = []
     hof_node_sum = []
 
@@ -126,9 +128,10 @@ def calculateScore(individuals, pareto):
             function_result = int(func(*list(x[1])) > 0.5)
             y_gp.append(function_result)
 
-        gp_f1score = sklearn.metrics.f1_score(blackbox_prediction_test, np.array(y_gp))
-        gp_accuracy_score = sklearn.metrics.accuracy_score(blackbox_prediction_test, np.array(y_gp))
+        gp_f1score = sklearn.metrics.f1_score(opaque_model_prediction_test, np.array(y_gp))
+        gp_accuracy_score = sklearn.metrics.accuracy_score(opaque_model_prediction_test, np.array(y_gp))
         hallOfFame.append((gp_f1score, i, gp_accuracy_score))
+        f1_score_sum += gp_f1score
 
     for individual in hallOfFame:
         hof_height_sum.append(individual[1].height)
@@ -136,8 +139,8 @@ def calculateScore(individuals, pareto):
 
     hallOfFame.sort(key=lambda x: x[0], reverse=True)
 
-    mlp_fscore = sklearn.metrics.f1_score(y_test, blackbox_prediction_test)
-    mlp_accuracy = sklearn.metrics.accuracy_score(y_test, blackbox_prediction_test)
+    mlp_fscore = sklearn.metrics.f1_score(y_test, opaque_model_prediction_test)
+    mlp_accuracy = sklearn.metrics.accuracy_score(y_test, opaque_model_prediction_test)
 
     return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore, hallOfFame[0][2], \
            mlp_accuracy, \
@@ -151,7 +154,7 @@ def executeGeneticProgramming():
     pareto = tools.ParetoFront()
     generation = 40
 
-    toolbox = setUpGP(len(X_train[0]), interpretMLP)
+    toolbox = setUpGP(len(X_train[0]), fitness_function)
 
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
@@ -171,9 +174,8 @@ def executeGeneticProgramming():
     algorithms.eaSimple(pop, toolbox, 0.5, 0.1, generation, mstats, halloffame=hof, verbose=True)
     pareto.update(pop)
 
-    # Gather all the fitness in one list and print the stats
     logbook.record(gen=generation, evals=len(pop), **mstats.compile(pop))
-    print(logbook.stream)
+
     return calculateScore(hof, pareto),
 
 
@@ -215,35 +217,48 @@ def generateReport(n_experiments, best_pareto=None):
 
         if gp_fscore > best_gp_fscore:
             best_gp_fscore = gp_fscore
-            best_gp_function = gp_function
             best_pareto = pareto_
+
+    fit_max = logbook.chapters["fscore_stats"].select("max")
+    print("============================FIT_MAX SIMPLICITY============================", fit_max)
+    import matplotlib.pyplot as plt
+
+    fig, ax1 = plt.subplots()
+    ax1.plot(range(0, n_experiments), fit_max, "r-", label="Maximum Fitness")
+    ax1.set_xlabel("Experiments")
+    ax1.set_ylabel("F1-Score")
+    for tl in ax1.get_yticklabels():
+        tl.set_color("b")
+    plt.savefig("pareto_results/" + dataset_name + "/fscore.png")
+
+    fscoreData = []
+    simplicityData = []
+
+    for p in accumulatedPareto:
+        for i in p.items:
+            fscore, simplicity = fitness_function(i)
+            fscoreData.append(fscore)
+            simplicityData.append(simplicity)
 
     results_log = [{
         'mlp_fscore': sum(mlp_fscore_sum) / n_experiments,
         'mlp_fscore_std': statistics.pstdev(mlp_fscore_sum),
         'gp_fscore_avg': sum(gp_fscore_sum) / n_experiments,
         'gp_fscore_std': statistics.pstdev(gp_fscore_sum),
-        'total_pareto': best_pareto.items.__len__()
+        'total_pareto': best_pareto.items.__len__(),
+        'fit_max': fit_max,
+        'fscore_data': fscoreData,
+        'simplicity_data': simplicityData,
     }]
     df_logbook = pd.DataFrame(results_log)
     df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
-    generateParetoCharts(accumulatedPareto)
-    generateTree(best_pareto)
+    generateParetoCharts(fscoreData, simplicityData)
+    # generateTree(best_pareto)
 
 
-def generateParetoCharts(paretos):
+def generateParetoCharts(fscoreData, simplicityData):
     import matplotlib.pyplot as plt
-    import math
     global dataset_name
-
-    fscoreData = []
-    splitData = []
-
-    for p in paretos:
-        for i in p.items:
-            fscore, split_points = interpretMLP(i)
-            fscoreData.append(fscore)
-            splitData.append(split_points)
 
     # fig = plt.figure()
     # ax = fig.add_subplot(111, projection='3d')
@@ -261,9 +276,11 @@ def generateParetoCharts(paretos):
     # plt.show()
 
     fig1, ax1 = plt.subplots()
-    ax1.plot(splitData, fscoreData, 'ro')
+    print("============================SIMPLICITY_DATA============================", simplicityData)
+    print("============================FSCORE_DATA============================", fscoreData)
+    ax1.plot(simplicityData, fscoreData, 'gx')
 
-    ax1.set(xlabel='split_points', ylabel='fscore',
+    ax1.set(xlabel='simplicity', ylabel='fscore',
             title='')
     ax1.grid()
     plt.savefig("pareto_results/" + dataset_name + "/split_points.png")
@@ -271,6 +288,16 @@ def generateParetoCharts(paretos):
     # fig1.savefig("pareto_results/" + dataset_name + "/ari.png")
     # plt.show()
     #
+    # fig2, ax2 = plt.subplots()
+    # ax2.plot(complexTermData, fscoreData, 'ro')
+    #
+    # ax2.set(xlabel='complex terminals', ylabel='fscore',
+    #         title='')
+    # ax2.grid()
+    #
+    # fig2.savefig("pareto_results/" + dataset_name + "/complexTerminals.png")
+    # # plt.show()
+
     # fig2, ax2 = plt.subplots()
     # ax2.plot(complexTermData, fscoreData, 'ro')
     #
@@ -317,7 +344,7 @@ def generateTree(best_pareto):
 
 def main(dataset):
     # Get global scope variables
-    global X_train, X_test, y_train, y_test, toolbox, blackbox_prediction_test, blackbox_prediction_train, mlp_time
+    global X_train, X_test, y_train, y_test, toolbox, opaque_model_prediction_test, opaque_model_prediction_train, mlp_time
 
     if dataset == 'ionosphere':
         # Fetch dataset and set train/test variables
@@ -339,8 +366,8 @@ def main(dataset):
         X_train, X_test, y_train, y_test = fetch_dataset.fetch_banknotes()
 
     # Execute blackbox algorithm
-    blackbox_prediction_test, blackbox_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
-                                                                                                   y_train, y_test)
+    opaque_model_prediction_test, opaque_model_prediction_train, classifier, mlp_time = mlp.createInstance(X_train, X_test,
+                                                                                                           y_train, y_test)
 
     generateReport(n_experiments=30)
 
@@ -351,12 +378,12 @@ if __name__ == '__main__':
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    # dataset_name = 'ionosphere'
-    # main(dataset_name)
+    dataset_name = 'ionosphere'
+    main(dataset_name)
 
     # dataset_name = 'breast_cancer'
     # main(dataset_name)
-    #
+
     # dataset_name = 'digits1_7'
     # main(dataset_name)
     #
