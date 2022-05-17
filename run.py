@@ -98,7 +98,7 @@ def fitness_function(individual):
     # complextTerminals = 1 / (1 + math.exp(-complexity))
     split = 1 / (1 + math.exp(-split_points))
 
-    return sklearn.metrics.f1_score(blackbox_prediction_train, y_pred), split
+    return sklearn.metrics.f1_score(opaque_model_prediction_train, y_pred), split
 
 
 def getComplexityFactor(primitive):
@@ -224,7 +224,7 @@ def generateReport(n_experiments, best_pareto=None):
     import matplotlib.pyplot as plt
 
     fig, ax1 = plt.subplots()
-    ax1.plot(range(0, n_experiments), fit_max, "r-", label="Maximum Fitness")
+    ax1.plot(range(0, n_experiments), fit_max, "g-", label="Maximum Fitness")
     ax1.set_xlabel("Experiments")
     ax1.set_ylabel("F1-Score")
     for tl in ax1.get_yticklabels():
@@ -232,13 +232,13 @@ def generateReport(n_experiments, best_pareto=None):
     plt.savefig("pareto_results/" + dataset_name + "/fscore.png")
 
     fscoreData = []
-    simplicityData = []
+    splitData = []
 
     for p in accumulatedPareto:
         for i in p.items:
-            fscore, simplicity = fitness_function(i)
+            fscore, split = fitness_function(i)
             fscoreData.append(fscore)
-            simplicityData.append(simplicity)
+            splitData.append(split)
 
     results_log = [{
         'mlp_fscore': sum(mlp_fscore_sum) / n_experiments,
@@ -248,15 +248,15 @@ def generateReport(n_experiments, best_pareto=None):
         'total_pareto': best_pareto.items.__len__(),
         'fit_max': fit_max,
         'fscore_data': fscoreData,
-        'simplicity_data': simplicityData,
+        'split_points_data': splitData,
     }]
     df_logbook = pd.DataFrame(results_log)
     df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
-    generateParetoCharts(fscoreData, simplicityData)
+    generateParetoCharts(fscoreData, splitData)
     # generateTree(best_pareto)
 
 
-def generateParetoCharts(fscoreData, simplicityData):
+def generateParetoCharts(fscoreData, splitData):
     import matplotlib.pyplot as plt
     global dataset_name
 
@@ -276,11 +276,11 @@ def generateParetoCharts(fscoreData, simplicityData):
     # plt.show()
 
     fig1, ax1 = plt.subplots()
-    print("============================SIMPLICITY_DATA============================", simplicityData)
+    print("============================SPLIT_DATA============================", splitData)
     print("============================FSCORE_DATA============================", fscoreData)
-    ax1.plot(simplicityData, fscoreData, 'gx')
+    ax1.plot(splitData, fscoreData, 'cs')
 
-    ax1.set(xlabel='simplicity', ylabel='fscore',
+    ax1.set(xlabel='split_points', ylabel='fscore',
             title='')
     ax1.grid()
     plt.savefig("pareto_results/" + dataset_name + "/split_points.png")
@@ -378,21 +378,20 @@ if __name__ == '__main__':
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    dataset_name = 'ionosphere'
-    main(dataset_name)
+    # dataset_name = 'ionosphere'
+    # main(dataset_name)
 
     # dataset_name = 'breast_cancer'
     # main(dataset_name)
 
     # dataset_name = 'digits1_7'
     # main(dataset_name)
-    #
-    dataset_name = 'digits3_9'
-    main(dataset_name)
-    #
-    # dataset_name = 'banknotes'
+    # #
+    # dataset_name = 'digits3_9'
     # main(dataset_name)
 
+    # dataset_name = 'banknotes'
+    # main(dataset_name)
     time_end = process_time()
 
     print(time_end - time_start)
