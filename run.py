@@ -49,8 +49,8 @@ def setUpGP(n_parameters: int, evaluate_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMax", base.Fitness, weights=(1.0, -1.0))
-    creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
+    creator.create("FitnessMulti", base.Fitness, weights=(1.0, -1.0))
+    creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMulti)
 
     toolbox = base.Toolbox()
     toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
@@ -96,7 +96,7 @@ def fitness_function(individual):
     # avgTreeLength = individual.__len__() / split_points if split_points != 0 else 0
     simplicity = 1 / (1 + math.exp(-(((50 - 0.5) * (individual.__len__() - 0.5)) / 49)))
 
-    return sklearn.metrics.f1_score(opaque_model_prediction_test, y_pred), simplicity
+    return sklearn.metrics.f1_score(opaque_model_prediction_train, y_pred), simplicity
 
 
 def getComplexityFactor(primitive):
