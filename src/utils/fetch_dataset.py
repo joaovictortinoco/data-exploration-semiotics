@@ -106,7 +106,7 @@ def fetch_kdd():
 
 
 def fetch_ionosphere():
-    load_ionosphere = pd.read_csv('https://archive.ics.uci.edu/ml/machine-learning-databases/ionosphere/ionosphere.data')
+    load_ionosphere = pd.read_csv('./src/utils/ionosphere.data')
     X = load_ionosphere.iloc[:,0:34]
     y = load_ionosphere.iloc[:,34]
     y = np.where(y == 'b', 0, y)
