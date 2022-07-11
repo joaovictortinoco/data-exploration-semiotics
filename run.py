@@ -221,9 +221,8 @@ def generateReport(n_experiments, best_pareto=None):
     fit_max = logbook.chapters["fscore_stats"].select("max")
 
     import matplotlib.pyplot as plt
-    fit_max = []
-    fit_max_gpx = []
-    fit_max_const = []
+    fit_max_gpx = [0.8635875402792695, 0.9001029866117405, 0.8635875402792695, 0.8013300083125521, 0.8320855614973262, 0.8400392541707556, 0.8626198083067093, 0.8320855614973262, 0.9134808853118711, 0.8320855614973262, 0.8320855614973262, 0.8253119429590018, 0.8583690987124464, 0.8181011535048802, 0.8120603015075376, 0.7885714285714287, 0.7596717467760844, 0.7989179440937783, 0.8839662447257384, 0.8030467899891185, 0.7735644637053087, 0.8013300083125521, 0.760655737704918, 0.8013300083125521, 0.8367129135538954, 0.7860508953817154, 0.8635875402792695, 0.8413793103448276, 0.7804444444444445, 0.8635875402792695]
+    fit_max_const = [0.856868395773295, 0.8580576307363929, 0.7688734030197446, 0.7688734030197446, 0.7608695652173915, 0.8094262295081968, 0.8590604026845639, 0.779107725788901, 0.8053024026512013, 0.9213483146067416, 0.8405017921146953, 0.7688734030197446, 0.8601921024546425, 0.7688734030197446, 0.7688734030197446, 0.9475890985324948, 0.8664495114006515, 0.8153681963713981, 0.7688734030197446, 0.8137472283813747, 0.8053024026512013, 0.8370370370370371, 0.784, 0.8342361863488624, 0.8545454545454545, 0.8129370629370629, 0.775609756097561, 0.9243856332703213, 0.8053024026512013, 0.7874493927125505]
     fig, ax1 = plt.subplots()
     line1, = ax1.plot(range(0, n_experiments), fit_max, "b-", label="remo-gp")
     line2, = ax1.plot(range(0, n_experiments), fit_max_gpx, "y-", label="gpx")
@@ -241,10 +240,11 @@ def generateReport(n_experiments, best_pareto=None):
         'gp_fscore_avg': sum(gp_fscore_sum) / n_experiments,
         'gp_fscore_std': statistics.pstdev(gp_fscore_sum),
         'total_pareto': best_pareto.items.__len__(),
+        'fit_max': fit_max
     }]
     df_logbook = pd.DataFrame(results_log)
     df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
-    generateParetoCharts(accumulatedPareto)
+    # generateParetoCharts(accumulatedPareto)
     # generateTree(best_pareto)
 
 
@@ -444,8 +444,8 @@ if __name__ == '__main__':
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    dataset_name = 'ionosphere'
-    main(dataset_name)
+    # dataset_name = 'ionosphere'
+    # main(dataset_name)
 
     # dataset_name = 'breast_cancer'
     # main(dataset_name)
@@ -456,8 +456,8 @@ if __name__ == '__main__':
     # dataset_name = 'digits3_9'
     # main(dataset_name)
 
-    # dataset_name = 'banknotes'
-    # main(dataset_name)
+    dataset_name = 'banknotes'
+    main(dataset_name)
 
     # import matplotlib.pyplot as plt
     # fig1, ax1 = plt.subplots()
@@ -501,23 +501,6 @@ if __name__ == '__main__':
     # ax1.grid()
     #
     # fig1.savefig("pareto_results/" + dataset_name + "/breast_compare_ari.png")
-
-    import matplotlib.pyplot as plt
-
-    fit_max = []
-    fit_max_gpx = [0.8156424581005587, 0.8105263157894738, 0.8019801980198019, 0.7848837209302326, 0.8106796116504853, 0.7933884297520661, 0.8167539267015707, 0.825986078886311, 0.8200589970501475, 0.825986078886311, 0.7616580310880828, 0.8200589970501475, 0.825986078886311, 0.7861271676300579, 0.7878787878787878, 0.825986078886311, 0.8242074927953891, 0.8157099697885196, 0.825986078886311, 0.8423772609819121, 0.7772925764192139, 0.8048048048048047, 0.8150289017341041, 0.8091603053435115, 0.814404432132964, 0.7760416666666666, 0.8159203980099502, 0.8579088471849866, 0.7789473684210527, 0.8010075566750628]
-    fit_max_const = [0.8118811881188118, 0.8721461187214611, 0.8781725888324873, 0.882494004796163, 0.8192219679633868, 0.8357487922705314, 0.8164251207729468, 0.8154269972451792, 0.8721461187214611, 0.8192219679633868, 0.8173913043478261, 0.8110403397027601, 0.8284313725490196, 0.8444444444444444, 0.8466819221967963, 0.8586666666666666, 0.8431876606683805, 0.8329297820823244, 0.8213457076566126, 0.8110403397027601, 0.8201058201058201, 0.8390243902439023, 0.8146341463414634, 0.8200000000000001, 0.8058968058968059, 0.8329297820823244, 0.8277404921700224, 0.8721461187214611, 0.8110403397027601, 0.8021978021978023]
-    fig, ax1 = plt.subplots()
-    line1, = ax1.plot(range(0, 30), fit_max, "b-", label="remo-gp")
-    line2, = ax1.plot(range(0, 30), fit_max_gpx, "y-", label="gpx")
-    line3, = ax1.plot(range(0, 30), fit_max_const, "r-", label="constrained")
-    ax1.set_xlabel("Experiments")
-    ax1.set_ylabel("F1-Score")
-    ax1.legend(handles=[line1, line2, line3])
-    for tl in ax1.get_yticklabels():
-        tl.set_color("b")
-    plt.savefig("pareto_results/" + dataset_name + "/fscore.png")
-
     time_end = process_time()
 
     print(time_end - time_start)
