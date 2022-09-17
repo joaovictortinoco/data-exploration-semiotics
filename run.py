@@ -49,8 +49,8 @@ def setUpGP(n_parameters: int, evaluate_function):
     pset.addPrimitive(protectedDiv, 2)
     pset.renameArguments(ARG0='x', ARG1='y', ARG2='z', ARG3='t')
 
-    creator.create("FitnessMulti", base.Fitness, weights=(1.0, -1.0, -1.0))
-    creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMulti)
+    creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+    creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
 
     toolbox = base.Toolbox()
     toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
@@ -74,45 +74,18 @@ def fitness_function(individual):
     # Evaluate fitness of an individual within a generation.
     import math
     func = toolbox.compile(expr=individual)
-    split_points = 0
-    countDivision = 0
-    countMult = 0
-    countPrimitive = 0
-    countTerminals = 0
-    complexity = 0
-    for i in individual.copy():
-        split_points += i.arity if type(i) == deap.gp.Primitive else 0
-        countPrimitive += 1 if type(i) == deap.gp.Primitive else 0
-        complexity += getComplexityFactor(i.name) if type(i) == deap.gp.Primitive else 0
-        countTerminals += 1 if type(i) == deap.gp.Terminal else 0
-        countDivision += 1 if type(i) == deap.gp.Primitive and i.name == 'protectedDiv' else 0
-        countMult += 1 if type(i) == deap.gp.Primitive and i.name == 'mul' else 0
+
     y_pred = []
 
     for x in enumerate(X_train):
         function_result = int(func(*x[1]) > 0.5)
         y_pred.append(function_result)
 
-    # avgTreeLength = individual.__len__() / split_points if split_points != 0 else 0
-    ari = 1 / (1 + math.exp(-(countTerminals * countPrimitive)))
-    complextTerminals = 1 / (1 + math.exp(-complexity))
-
-    return sklearn.metrics.f1_score(opaque_model_prediction_train, y_pred), ari, complextTerminals
-
-
-def getComplexityFactor(primitive):
-    if primitive == 'add':
-        return 1
-    elif primitive == 'sub':
-        return 1
-    elif primitive == 'mul':
-        return 5
-    elif primitive == 'protectedDiv':
-        return 10
+    return sklearn.metrics.f1_score(opaque_model_prediction_train, y_pred)
 
 
 # Calculates score for test dataset in comparison with black-box
-def calculateScore(individuals, pareto):
+def calculateScore(individuals):
     global opaque_model_prediction_test
     hallOfFame = []
     f1_score_list = []
@@ -143,26 +116,20 @@ def calculateScore(individuals, pareto):
 
     return hallOfFame[0][0], hallOfFame[0][1], mlp_fscore, hallOfFame[0][2], \
            mlp_accuracy, \
-           sum(hof_height_sum) / len(hallOfFame), sum(hof_node_sum) / len(hallOfFame), \
-           pareto,
+           sum(hof_height_sum) / len(hallOfFame), sum(hof_node_sum) / len(hallOfFame),
 
 
 def executeGeneticProgramming():
     global X_train
     global logbook
-    pareto = tools.ParetoFront()
     generation = 40
-
     toolbox = setUpGP(len(X_train[0]), fitness_function)
 
     pop = toolbox.population(n=300)
     hof = tools.HallOfFame(10)
     fscore_stats = tools.Statistics(lambda ind: ind.fitness.values[0])
-    # avgTree_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-    ari_stats = tools.Statistics(lambda ind: ind.fitness.values[1])
-    complexTerminals_stats = tools.Statistics(lambda ind: ind.fitness.values[2])
-    mstats = tools.MultiStatistics(fscore_stats=fscore_stats, ari_stats=ari_stats,
-                                   complexTerminals_stats=complexTerminals_stats)
+
+    mstats = tools.MultiStatistics(fscore_stats=fscore_stats)
     mstats.register("avg", numpy.mean)
     mstats.register("std", numpy.std)
     mstats.register("min", numpy.min)
@@ -171,11 +138,10 @@ def executeGeneticProgramming():
     logbook.header = ["gen", "evals"] + mstats.fields
 
     algorithms.eaSimple(pop, toolbox, 0.5, 0.1, generation, mstats, halloffame=hof, verbose=True)
-    pareto.update(pop)
 
     logbook.record(gen=generation, evals=len(pop), **mstats.compile(pop))
 
-    return calculateScore(hof, pareto),
+    return calculateScore(hof),
 
 
 def generateReport(n_experiments, best_pareto=None):
@@ -199,12 +165,9 @@ def generateReport(n_experiments, best_pareto=None):
     accumulatedPareto = []
     for i in range(0, n_experiments):
         time_start = process_time()
-        gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node, pareto_ = \
-            executeGeneticProgramming()[0]
+        gp_fscore, gp_function, mlp_fscore, accuracy_score, mlp_accuracy, gp_height, gp_node = executeGeneticProgramming()[0]
         time_end = process_time()
         gp_sum_time += time_end - time_start
-
-        accumulatedPareto.append(pareto_)
 
         mlp_fscore_sum.append(mlp_fscore)
         mlp_accuracy_sum.append(mlp_accuracy)
@@ -216,7 +179,6 @@ def generateReport(n_experiments, best_pareto=None):
 
         if gp_fscore > best_gp_fscore:
             best_gp_fscore = gp_fscore
-            best_pareto = pareto_
 
     fit_max = logbook.chapters["fscore_stats"].select("max")
 
@@ -244,8 +206,6 @@ def generateReport(n_experiments, best_pareto=None):
     }]
     df_logbook = pd.DataFrame(results_log)
     df_logbook.to_csv("pareto_results/" + dataset_name + "/results.csv")
-    # generateParetoCharts(accumulatedPareto)
-    # generateTree(best_pareto)
 
 
 def generateParetoCharts(paretos):
@@ -447,8 +407,8 @@ if __name__ == '__main__':
     # dataset_name = 'ionosphere'
     # main(dataset_name)
 
-    # dataset_name = 'breast_cancer'
-    # main(dataset_name)
+    dataset_name = 'breast_cancer'
+    main(dataset_name)
 
     # dataset_name = 'digits1_7'
     # main(dataset_name)
@@ -456,8 +416,8 @@ if __name__ == '__main__':
     # dataset_name = 'digits3_9'
     # main(dataset_name)
 
-    dataset_name = 'banknotes'
-    main(dataset_name)
+    # dataset_name = 'banknotes'
+    # main(dataset_name)
 
     # import matplotlib.pyplot as plt
     # fig1, ax1 = plt.subplots()
