@@ -378,8 +378,8 @@ if __name__ == '__main__':
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    # dataset_name = 'ionosphere'
-    # main(dataset_name)
+    dataset_name = 'ionosphere'
+    main(dataset_name)
 
     # dataset_name = 'breast_cancer'
     # main(dataset_name)
