@@ -530,8 +530,8 @@ if __name__ == '__main__':
     # dataset_name = 'ionosphere'
     # main(dataset_name)
 
-    # dataset_name = 'breast_cancer'
-    # main(dataset_name)
+    dataset_name = 'breast_cancer'
+    main(dataset_name)
 
     # dataset_name = 'digits1_7'
     # main(dataset_name)
@@ -539,8 +539,8 @@ if __name__ == '__main__':
     # dataset_name = 'digits3_9'
     # main(dataset_name)
 
-    dataset_name = 'banknotes'
-    main(dataset_name)
+    # dataset_name = 'banknotes'
+    # main(dataset_name)
 
     # import matplotlib.pyplot as plt
     # fig1, ax1 = plt.subplots()
