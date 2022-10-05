@@ -373,25 +373,21 @@ def main(dataset):
 
 
 if __name__ == '__main__':
-    time_start = process_time()
 
     # dataset_name = 'wine'
     # main(dataset_name)
 
-    dataset_name = 'ionosphere'
-    main(dataset_name)
+    # dataset_name = 'ionosphere'
+    # main(dataset_name)
 
     # dataset_name = 'breast_cancer'
     # main(dataset_name)
 
-    # dataset_name = 'digits1_7'
-    # main(dataset_name)
+    dataset_name = 'digits1_7'
+    main(dataset_name)
     # #
     # dataset_name = 'digits3_9'
     # main(dataset_name)
 
     # dataset_name = 'banknotes'
     # main(dataset_name)
-    time_end = process_time()
-
-    print(time_end - time_start)
